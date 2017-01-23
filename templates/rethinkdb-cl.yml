@@ -1,0 +1,306 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: rethinkdb-cl
+  annotations:
+    description: RethinkDB Cluster for Openshift
+    tags: instant-app
+labels:
+  template: rethinkdb-cl 
+
+objects:
+
+#####################
+#   Proxy Service   #
+#####################
+
+- kind: Service
+  apiVersion: v1
+  metadata:
+    labels:
+      db: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}-proxy
+  spec:
+    type: LoadBalancer
+    ports:
+      - port: 28015
+        targetPort: driver
+    selector:
+      db: ${CLUSTER_NAME}
+      role: proxy
+
+#####################
+#   Admin Service   #
+#####################
+
+- kind: Service
+  apiVersion: v1
+  metadata:
+    labels:
+      db: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}-admin
+  spec:
+    type: LoadBalancer
+    ports:
+      - port: 8080
+        targetPort: admin
+    selector:
+      db: ${CLUSTER_NAME}
+      role: admin
+
+#####################
+#  Replica Service  # 
+#####################
+
+- kind: Service
+  apiVersion: v1
+  metadata:
+    labels:
+      db: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}
+  spec:
+    ports:
+      - port: 29015
+        targetPort: cluster
+    selector:
+      db: ${CLUSTER_NAME}
+      role: replica
+
+#####################
+#    Replica Pod    # 
+#####################
+
+- kind: ReplicationController
+  apiVersion: v1
+  metadata:
+    labels:
+      db: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}-replica
+  spec:
+    replicas: 1
+    template:
+      metadata:
+        labels:
+          db: ${CLUSTER_NAME}
+          role: replica
+      spec:
+        containers:
+        - image: akerhei/openshift-rethinkdb-testcl
+          args:
+            - "--cache-size"
+            - "100"
+          imagePullPolicy: Always
+          name: ${CLUSTER_NAME}
+          env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.podIP
+          - name: RETHINK_CLUSTER
+            value: ${CLUSTER_NAME}
+          ports:
+          - containerPort: 8080
+            name: admin
+          - containerPort: 28015
+            name: driver
+          - containerPort: 29015
+            name: cluster
+          resources:
+            limits:
+              cpu: ${CPU_LIMIT}
+              memory: ${MEMORY_LIMIT}
+          volumeMounts:
+          - mountPath: /data/rethinkdb_data
+            name: rethinkdb-storage
+          livenessProbe:
+            exec:
+              command:
+                - /usr/bin/ready-probe.sh
+            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /usr/bin/ready-probe.sh
+            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+        volumes:
+        - name: rethinkdb-storage
+          emptyDir: {}
+        serviceAccount: deployer
+
+#####################
+#     Admin Pod     #
+#####################
+
+- kind: Deployment
+  apiVersion: extensions/v1beta1
+  metadata:
+    labels:
+      db: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}-admin
+  spec:
+    template:
+      metadata:
+        labels:
+          db: ${CLUSTER_NAME}
+          role: admin
+      spec:
+        containers:
+        - image: akerhei/openshift-rethinkdb-testcl
+          imagePullPolicy: Always
+          name: ${CLUSTER_NAME}
+          env:
+          - name: PROXY
+            value: "true"
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.podIP
+          - name: RETHINK_CLUSTER
+            value: ${CLUSTER_NAME}
+          ports:
+          - containerPort: 8080
+            name: admin
+          - containerPort: 28015
+            name: driver
+          - containerPort: 29015
+            name: cluster
+          volumeMounts:     
+          - mountPath: /data
+            name: rethinkdb-storage
+          livenessProbe:
+            exec:
+              command:
+                - /usr/bin/ready-probe.sh
+            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /usr/bin/ready-probe.sh
+            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+        volumes:
+        - name: rethinkdb-storage
+          emptyDir: {}
+        serviceAccount: deployer
+
+#####################
+#     Proxy Pod     #
+#####################
+
+- kind: Deployment
+  apiVersion: extensions/v1beta1
+  metadata:
+    labels:
+      db: ${CLUSTER_NAME}
+    name: ${CLUSTER_NAME}-proxy
+  spec:
+    template:
+      metadata:
+        labels:
+          db: ${CLUSTER_NAME}
+          role: proxy
+      spec:
+        containers:
+        - image: akerhei/openshift-rethinkdb-testcl
+          imagePullPolicy: Always
+          name: ${CLUSTER_NAME}
+          env:
+          - name: PROXY
+            value: "true"
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.podIP
+          - name: RETHINK_CLUSTER
+            value: ${CLUSTER_NAME}
+          ports:
+          - containerPort: 8080
+            name: admin
+          - containerPort: 28015
+            name: driver
+          - containerPort: 29015
+            name: cluster
+          volumeMounts:     
+          - mountPath: /data
+            name: rethinkdb-storage
+          livenessProbe:
+            exec:
+              command:
+                - /usr/bin/ready-probe.sh
+            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /usr/bin/ready-probe.sh
+            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+        volumes:
+        - name: rethinkdb-storage
+          emptyDir: {}
+        serviceAccount: deployer
+
+### PARAMETERS ###
+parameters:
+- name: CLUSTER_NAME
+  displayName: Name of the cluster
+  value: "rethinkdb-cl"
+  required: true
+- name: CPU_LIMIT
+  displayName: CPU limit
+  description: Maximum amount of CPU each replica can use.
+  value: "100m"
+  required: true
+- name: MEMORY_LIMIT
+  diplayName: Memory limit
+  description: Maximum amount of memory each replica can use.
+  value: "512Mi"
+  required: true
