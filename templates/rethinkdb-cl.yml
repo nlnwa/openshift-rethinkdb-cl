@@ -85,7 +85,7 @@ objects:
           role: replica
       spec:
         containers:
-        - image: akerhei/openshift-rethinkdb-cl
+        - image: norsknettarkiv/openshift-rethinkdb-cl
           args:
             - "--cache-size"
             - "100"
@@ -162,7 +162,7 @@ objects:
           role: admin
       spec:
         containers:
-        - image: akerhei/openshift-rethinkdb-cl
+        - image: norsknettarkiv/openshift-rethinkdb-cl
           imagePullPolicy: Always
           name: ${CLUSTER_NAME}
           env:
@@ -234,7 +234,7 @@ objects:
           role: proxy
       spec:
         containers:
-        - image: akerhei/openshift-rethinkdb-cl
+        - image: norsknettarkiv/openshift-rethinkdb-cl
           imagePullPolicy: Always
           name: ${CLUSTER_NAME}
           env:
